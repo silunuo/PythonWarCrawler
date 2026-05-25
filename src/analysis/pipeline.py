@@ -72,7 +72,9 @@ def analyze_comments(raw_path: Path, clean_path: Path, summary_path: Path) -> di
         axis=1,
     )
 
-    stopwords = _load_stopwords(Path(__file__).resolve().parents[2])
+    project_root = Path(__file__).resolve().parents[2]
+    _set_jieba_cache(project_root)
+    stopwords = _load_stopwords(project_root)
     df["tokens_list"] = df.apply(lambda row: _tokenize(row["content"], row["language"], stopwords), axis=1)
     df = df[df["tokens_list"].map(bool)].copy()
     df["tokens"] = df["tokens_list"].map(lambda tokens: " ".join(tokens))
@@ -101,6 +103,13 @@ def _load_stopwords(project_root: Path) -> dict[str, set[str]]:
         "zh": _read_stopwords(resources / "stopwords_zh.txt"),
         "en": _read_stopwords(resources / "stopwords_en.txt"),
     }
+
+
+def _set_jieba_cache(project_root: Path) -> None:
+    cache_dir = project_root / ".cache" / "jieba"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    jieba.dt.tmp_dir = str(cache_dir)
+    jieba.dt.cache_file = str(cache_dir / "jieba.cache")
 
 
 def _read_stopwords(path: Path) -> set[str]:
