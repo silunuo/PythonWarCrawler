@@ -1,52 +1,85 @@
-# 全球网友对美以伊战争评论分析与可视化操作说明
+# PythonWarCrawler 使用说明
 
 本程序会从 Bilibili、百度贴吧、Reddit 抓取真实评论，然后做清洗、分词、情感分析、关键词提取、主题分类，最后生成 pyecharts 图表和结论。
 
----
-
-## 1. 文件清单
-
-| 路径 | 用途 |
-| --- | --- |
-| `main.py` | 程序入口，所有命令都从这里执行 |
-| `config.json` | 代理、关键词、抓取页数、输出路径配置 |
-| `requirements.txt` | 项目依赖清单 |
-| `src/crawlers/` | Bilibili、百度贴吧、Reddit 三个平台爬虫 |
-| `src/analysis/` | 数据清洗、分词、情感分析、关键词、分类 |
-| `src/visualization/` | pyecharts 图表和结论生成 |
-| `resources/` | 中英文停用词 |
-| `data/raw/comments.csv` | 原始评论数据 |
-| `data/processed/analyzed_comments.csv` | 分析后的评论数据 |
-| `output/dashboard.html` | 图表页面 |
-| `output/conclusions.md` | 自动生成的结论 |
-| `output/summary.json` | 图表用的统计结果 |
+适合 Python 大作业方向二：全球网友对美以伊战争评论分析与可视化。
 
 ---
 
-## 2. 准备环境
+## 1. 克隆项目
 
-在项目目录执行：
+从远程仓库克隆：
+
+```powershell
+git clone https://github.com/silunuo/PythonWarCrawler.git
+cd PythonWarCrawler
+```
+
+如果你用 SSH：
+
+```powershell
+git clone git@github.com:silunuo/PythonWarCrawler.git
+cd PythonWarCrawler
+```
+
+仓库里只提交代码、配置和说明文档。`.venv`、`.pip-cache`、爬取结果、图表结果都需要在本地生成。
+
+---
+
+## 2. 本地环境
+
+建议使用 Python 3.10。依赖安装到项目目录里的 `.venv`，pip 缓存放到 `.pip-cache`。
+
+Windows PowerShell：
 
 ```powershell
 python -m venv .venv
 $env:PIP_CACHE_DIR = (Join-Path (Get-Location) '.pip-cache')
+```
+
+如果需要代理，安装依赖前先设置：
+
+```powershell
 $env:HTTP_PROXY = 'http://127.0.0.1:7890'
 $env:HTTPS_PROXY = 'http://127.0.0.1:7890'
+```
+
+安装依赖：
+
+```powershell
 .\.venv\Scripts\python -m pip install -r requirements.txt
 ```
 
-如果 `.venv` 已经存在，可以跳过这一步。
+macOS / Linux：
+
+```bash
+python3 -m venv .venv
+export PIP_CACHE_DIR="$PWD/.pip-cache"
+```
+
+如果需要代理：
+
+```bash
+export HTTP_PROXY="http://127.0.0.1:7890"
+export HTTPS_PROXY="http://127.0.0.1:7890"
+```
+
+安装依赖：
+
+```bash
+.venv/bin/python -m pip install -r requirements.txt
+```
 
 ---
 
-## 3. 配置说明
+## 3. 配置代理和关键词
 
 主要改 `config.json`。
 
 | 字段 | 说明 |
 | --- | --- |
 | `proxy.enabled` | 是否使用代理 |
-| `proxy.http` / `proxy.https` | 代理地址，当前是 `127.0.0.1:7890` |
+| `proxy.http` / `proxy.https` | 代理地址，默认是 `127.0.0.1:7890` |
 | `crawl.target_total` | 正式抓取目标数量，默认 3000 |
 | `crawl.queries_cn` | 中文关键词，用于 Bilibili 和贴吧 |
 | `crawl.queries_en` | 英文关键词，用于 Reddit |
@@ -55,7 +88,7 @@ $env:HTTPS_PROXY = 'http://127.0.0.1:7890'
 | `paths.clean_comments` | 分析后 CSV 输出路径 |
 | `paths.dashboard_html` | 图表页面输出路径 |
 
-如果不用代理，把这里改成：
+不用代理时，把 `proxy.enabled` 改成 `false`：
 
 ```json
 "proxy": {
@@ -67,78 +100,111 @@ $env:HTTPS_PROXY = 'http://127.0.0.1:7890'
 
 ---
 
-## 4. 运行步骤
+## 4. 快速验证
 
-### 4.1 先跑少量数据
+先跑少量数据，确认三个平台都能访问：
 
-这一步用来确认三个平台都能访问。
+Windows：
+
+```powershell
+.\.venv\Scripts\python main.py all --smoke
+```
+
+macOS / Linux：
+
+```bash
+.venv/bin/python main.py all --smoke
+```
+
+成功后会生成这些文件：
+
+```text
+data/raw/comments.csv
+data/processed/analyzed_comments.csv
+output/summary.json
+output/dashboard.html
+output/conclusions.md
+```
+
+---
+
+## 5. 分步运行
+
+如果想看每一步结果，可以分步执行。
+
+### 5.1 爬取评论
 
 ```powershell
 .\.venv\Scripts\python main.py crawl --smoke
 ```
 
-成功后会生成：
+输出：
 
 ```text
 data/raw/comments.csv
 ```
 
-### 4.2 清洗和分析
+### 5.2 清洗和分析
 
 ```powershell
 .\.venv\Scripts\python main.py analyze
 ```
 
-成功后会生成：
+输出：
 
 ```text
 data/processed/analyzed_comments.csv
 output/summary.json
 ```
 
-### 4.3 生成图表和结论
+### 5.3 生成图表和结论
 
 ```powershell
 .\.venv\Scripts\python main.py visualize
 ```
 
-成功后会生成：
+输出：
 
 ```text
 output/dashboard.html
 output/conclusions.md
 ```
 
-### 4.4 一条命令跑完整流程
+---
 
-少量验证：
+## 6. 正式抓取 3000 条
 
-```powershell
-.\.venv\Scripts\python main.py all --smoke
-```
-
-正式抓取 3000 条：
+Windows：
 
 ```powershell
 .\.venv\Scripts\python main.py all --target-total 3000
 ```
 
-正式模式下，如果真实平台返回的数据不够 3000 条，程序会退出并提示实际数量。程序不会补假数据。
+macOS / Linux：
+
+```bash
+.venv/bin/python main.py all --target-total 3000
+```
+
+正式模式会检查有效评论数量。如果真实平台返回的数据少于 3000 条，程序会退出并提示实际数量。程序不会补假数据。
 
 ---
 
-## 5. 看结果
+## 7. 查看结果
 
-1. 打开 `data/raw/comments.csv`，确认有三类平台数据：`Bilibili`、`Tieba`、`Reddit`。
-2. 打开 `data/processed/analyzed_comments.csv`，看 `sentiment_score`、`sentiment`、`category`、`tokens` 字段。
-3. 用浏览器打开 `output/dashboard.html`，查看平台数量、情感分布、主题占比、时间趋势、关键词词云。
-4. 打开 `output/conclusions.md`，查看自动生成的结论。
+| 文件 | 怎么看 |
+| --- | --- |
+| `data/raw/comments.csv` | 看原始评论，字段有平台、内容、时间、用户名、点赞数、链接、语言 |
+| `data/processed/analyzed_comments.csv` | 看 `tokens`、`sentiment_score`、`sentiment`、`category` |
+| `output/dashboard.html` | 用浏览器打开，看 pyecharts 图表 |
+| `output/conclusions.md` | 看自动生成的结论 |
+| `output/summary.json` | 看统计结果，主要给图表使用 |
 
 ---
 
-## 6. 验证清单
+## 8. 验证清单
 
-运行完后按这个清单检查：
+运行完后检查：
 
 - [ ] `.venv` 在项目目录里。
 - [ ] `.pip-cache` 在项目目录里。
@@ -146,23 +212,19 @@ output/conclusions.md
 - [ ] `data/processed/analyzed_comments.csv` 已生成。
 - [ ] `output/dashboard.html` 已生成。
 - [ ] `output/conclusions.md` 已生成。
-- [ ] `comments.csv` 里有 Bilibili、Tieba、Reddit 三个平台。
+- [ ] `comments.csv` 里有 `Bilibili`、`Tieba`、`Reddit` 三个平台。
 - [ ] 正式抓取时没有人为补数据。
 
-开发时已经验证过这些命令：
+可用下面命令检查依赖和语法：
 
 ```powershell
-.\.venv\Scripts\python main.py crawl --smoke
-.\.venv\Scripts\python main.py analyze
-.\.venv\Scripts\python main.py visualize
-.\.venv\Scripts\python main.py all --smoke
 .\.venv\Scripts\python -m pip check
 .\.venv\Scripts\python -m compileall main.py src
 ```
 
 ---
 
-## 7. 常见问题
+## 9. 常见问题
 
 ### Bilibili 出现 `HTTP 412`
 
@@ -195,3 +257,22 @@ output/conclusions.md
 ```
 
 页数越大，运行时间越长，被限流的概率也会变高。
+
+---
+
+## 10. 项目结构
+
+```text
+.
+├── main.py
+├── config.json
+├── requirements.txt
+├── resources/
+├── src/
+│   ├── analysis/
+│   ├── common/
+│   ├── crawlers/
+│   └── visualization/
+├── data/
+└── output/
+```
