@@ -2,8 +2,6 @@
 
 本程序会从 Bilibili、百度贴吧、Reddit 抓取真实评论，然后做清洗、分词、情感分析、关键词提取、主题分类，最后生成 pyecharts 图表和结论。
 
-适合 Python 大作业方向二：全球网友对美以伊战争评论分析与可视化。
-
 ---
 
 ## 1. 克隆项目
@@ -22,7 +20,6 @@ git clone git@github.com:silunuo/PythonWarCrawler.git
 cd PythonWarCrawler
 ```
 
-仓库里只提交代码、配置和说明文档。`.venv`、`.pip-cache`、爬取结果、图表结果都需要在本地生成。
 
 ---
 
@@ -30,14 +27,14 @@ cd PythonWarCrawler
 
 建议使用 Python 3.10。依赖安装到项目目录里的 `.venv`，pip 缓存放到 `.pip-cache`。
 
-Windows PowerShell：
+#### Windows PowerShell：
 
 ```powershell
 python -m venv .venv
 $env:PIP_CACHE_DIR = (Join-Path (Get-Location) '.pip-cache')
 ```
 
-如果需要代理，安装依赖前先设置：
+如果需要代理，安装依赖前先设置(根据你的客户端设置而定)：
 
 ```powershell
 $env:HTTP_PROXY = 'http://127.0.0.1:7890'
@@ -50,7 +47,7 @@ $env:HTTPS_PROXY = 'http://127.0.0.1:7890'
 .\.venv\Scripts\python -m pip install -r requirements.txt
 ```
 
-macOS / Linux：
+#### macOS / Linux：
 
 ```bash
 python3 -m venv .venv
@@ -240,7 +237,7 @@ macOS / Linux：
 
 ### 正式抓不到 3000 条
 
-先确认代理可用，再修改这些页数：
+先确认代理可用，再修改这些参数：
 
 ```json
 "bilibili": {
