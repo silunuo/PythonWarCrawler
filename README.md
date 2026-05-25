@@ -1,6 +1,6 @@
 # PythonWarCrawler 使用说明
 
-本程序会从 Bilibili、百度贴吧、Reddit 抓取真实评论，然后做清洗、分词、情感分析、关键词提取、主题分类，最后生成 pyecharts 图表和结论。
+本程序会从 Bilibili、百度贴吧、Reddit、YouTube 抓取真实评论，然后做清洗、分词、情感分析、关键词提取、主题分类，最后生成 pyecharts 图表和结论。
 
 ---
 
@@ -79,7 +79,7 @@ export HTTPS_PROXY="http://127.0.0.1:7890"
 | `proxy.http` / `proxy.https` | 代理地址，默认是 `127.0.0.1:7890` |
 | `crawl.target_total` | 正式抓取目标数量，默认 3000 |
 | `crawl.queries_cn` | 中文关键词，用于 Bilibili 和贴吧 |
-| `crawl.queries_en` | 英文关键词，用于 Reddit |
+| `crawl.queries_en` | 英文关键词，用于 Reddit 和 YouTube |
 | `crawl.tieba_forums` | 贴吧列表 |
 | `paths.raw_comments` | 原始 CSV 输出路径 |
 | `paths.clean_comments` | 分析后 CSV 输出路径 |
@@ -209,7 +209,7 @@ macOS / Linux：
 - [ ] `data/processed/analyzed_comments.csv` 已生成。
 - [ ] `output/dashboard.html` 已生成。
 - [ ] `output/conclusions.md` 已生成。
-- [ ] `comments.csv` 里有 `Bilibili`、`Tieba`、`Reddit` 三个平台。
+- [ ] `comments.csv` 里有 `Bilibili`、`Tieba`、`Reddit`、`YouTube` 四个平台。
 - [ ] 正式抓取时没有人为补数据。
 
 可用下面命令检查依赖和语法：
@@ -235,6 +235,10 @@ macOS / Linux：
 
 程序会先用公开评论接口，失败后再用 Reddit JSON 接口。代理不稳定时，可以稍后再跑。
 
+### YouTube 抓不到评论
+
+YouTube 评论依赖网页里的公开 continuation 数据。部分视频会关闭评论，或者网页返回的数据里没有评论入口，这种视频会被跳过。
+
 ### 正式抓不到 3000 条
 
 先确认代理可用，再修改这些参数：
@@ -250,6 +254,11 @@ macOS / Linux：
 },
 "reddit": {
   "pages_per_query": 8
+},
+"youtube": {
+  "search_pages": 2,
+  "videos_per_query": 8,
+  "comment_pages_per_video": 4
 }
 ```
 

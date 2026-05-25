@@ -44,6 +44,11 @@
     "reddit": {
       "page_size": 100,
       "pages_per_query": 8
+    },
+    "youtube": {
+      "search_pages": 2,
+      "videos_per_query": 8,
+      "comment_pages_per_video": 4
     }
   },
   "paths": {
