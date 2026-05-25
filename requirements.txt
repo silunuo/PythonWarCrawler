@@ -1,8 +1,8 @@
 requests>=2.31,<3
 beautifulsoup4>=4.12,<5
 lxml>=4.9,<6
-numpy>=1.23,<2
-pandas>=1.5,<2
+numpy>=1.24,<2
+pandas>=2.0,<2.1
 jieba>=0.42,<1
 snownlp>=0.12,<1
 pyecharts>=2.0,<3
