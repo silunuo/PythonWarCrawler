@@ -1,0 +1,9 @@
+.venv/
+.pip-cache/
+__pycache__/
+*.pyc
+
+data/raw/
+data/processed/
+output/
+logs/

@@ -1,0 +1,56 @@
+{
+  "proxy": {
+    "enabled": true,
+    "http": "http://127.0.0.1:7890",
+    "https": "http://127.0.0.1:7890"
+  },
+  "request": {
+    "timeout": 15,
+    "delay_seconds": 1.2,
+    "max_retries": 3,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+  },
+  "crawl": {
+    "target_total": 3000,
+    "smoke_target_per_platform": 10,
+    "queries_cn": [
+      "伊朗 以色列 战争",
+      "美以伊战争",
+      "伊朗反击以色列",
+      "美国 以色列 伊朗 冲突"
+    ],
+    "queries_en": [
+      "Iran Israel war",
+      "US Israel Iran conflict",
+      "Iran retaliation Israel",
+      "Middle East war Iran Israel"
+    ],
+    "tieba_forums": [
+      "国际观察",
+      "伊朗",
+      "以色列",
+      "军事"
+    ],
+    "bilibili": {
+      "search_pages": 8,
+      "comment_pages_per_video": 8,
+      "page_size": 20
+    },
+    "tieba": {
+      "thread_pages_per_forum": 6,
+      "post_pages_per_thread": 6,
+      "page_size": 30
+    },
+    "reddit": {
+      "page_size": 100,
+      "pages_per_query": 8
+    }
+  },
+  "paths": {
+    "raw_comments": "data/raw/comments.csv",
+    "clean_comments": "data/processed/analyzed_comments.csv",
+    "summary_json": "output/summary.json",
+    "dashboard_html": "output/dashboard.html",
+    "conclusions_md": "output/conclusions.md"
+  }
+}
