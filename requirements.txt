@@ -1,9 +1,9 @@
 requests>=2.31,<3
 beautifulsoup4>=4.12,<5
-lxml>=4.9,<6
+lxml>=4.9,<5
 numpy>=1.24,<2
 pandas>=2.0,<2.1
 jieba>=0.42,<1
 snownlp>=0.12,<1
 pyecharts>=2.0,<3
-aiotieba>=4.0,<5
+aiotieba==2.10.3
