@@ -6,6 +6,7 @@ from typing import Any
 import requests
 
 from src.common.config import AppConfig
+from src.common.date_range import DateRange
 from src.common.models import Comment, clean_content, iso_from_unix
 
 
@@ -26,7 +27,7 @@ class RedditCrawler:
         self.delay = float(config.get("request", "delay_seconds", default=1.0))
         self.max_retries = int(config.get("request", "max_retries", default=3))
 
-    def crawl(self, target: int, smoke: bool = False) -> list[Comment]:
+    def crawl(self, target: int, smoke: bool = False, date_range: DateRange | None = None) -> list[Comment]:
         comments = self._crawl_pullpush(target, smoke)
         if len(comments) >= target or comments:
             return comments[:target]
@@ -169,4 +170,3 @@ class RedditCrawler:
 
     def _sleep(self, smoke: bool) -> None:
         time.sleep(min(self.delay, 0.2) if smoke else self.delay)
-

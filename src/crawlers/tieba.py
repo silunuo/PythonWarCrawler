@@ -6,6 +6,7 @@ from typing import Any
 import aiotieba
 
 from src.common.config import AppConfig
+from src.common.date_range import DateRange
 from src.common.models import Comment, clean_content, iso_from_unix
 
 
@@ -18,7 +19,7 @@ class TiebaCrawler:
         self.delay = float(config.get("request", "delay_seconds", default=1.0))
         self.keywords = ["伊朗", "以色列", "美国", "美以伊", "冲突", "战争", "反击"]
 
-    def crawl(self, target: int, smoke: bool = False) -> list[Comment]:
+    def crawl(self, target: int, smoke: bool = False, date_range: DateRange | None = None) -> list[Comment]:
         return asyncio.run(self._crawl_async(target, smoke))
 
     async def _crawl_async(self, target: int, smoke: bool) -> list[Comment]:
@@ -158,4 +159,3 @@ class TiebaCrawler:
 
     async def _sleep(self, smoke: bool) -> None:
         await asyncio.sleep(min(self.delay, 0.2) if smoke else self.delay)
-

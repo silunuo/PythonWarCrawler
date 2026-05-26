@@ -8,6 +8,7 @@ from typing import Any
 import requests
 
 from src.common.config import AppConfig
+from src.common.date_range import DateRange
 from src.common.models import Comment, clean_content, stable_id
 
 
@@ -30,7 +31,7 @@ class YouTubeCrawler:
         self.delay = float(config.get("request", "delay_seconds", default=1.0))
         self.max_retries = int(config.get("request", "max_retries", default=3))
 
-    def crawl(self, target: int, smoke: bool = False) -> list[Comment]:
+    def crawl(self, target: int, smoke: bool = False, date_range: DateRange | None = None) -> list[Comment]:
         comments: list[Comment] = []
         seen: set[str] = set()
         queries = self.config.get("crawl", "queries_en", default=[])

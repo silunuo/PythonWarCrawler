@@ -5,6 +5,7 @@ import sys
 from collections import Counter
 
 from src.common.config import AppConfig
+from src.common.date_range import build_date_range
 from src.common.io import write_comments
 from src.crawlers.runner import crawl_all
 
@@ -17,6 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
     crawl = subparsers.add_parser("crawl", help="爬取真实评论")
     crawl.add_argument("--smoke", action="store_true", help="少量爬取，用来验证接口")
     crawl.add_argument("--target-total", type=int, default=None, help="正式爬取目标数量")
+    add_date_args(crawl)
 
     analyze = subparsers.add_parser("analyze", help="清洗并分析评论")
     analyze.add_argument("--input", default=None, help="原始 CSV")
@@ -28,7 +30,14 @@ def build_parser() -> argparse.ArgumentParser:
     all_cmd = subparsers.add_parser("all", help="爬取、分析、可视化")
     all_cmd.add_argument("--smoke", action="store_true", help="少量跑完整流程")
     all_cmd.add_argument("--target-total", type=int, default=None, help="正式爬取目标数量")
+    add_date_args(all_cmd)
     return parser
+
+
+def add_date_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--start-date", default=None, help="开始日期，格式 YYYY-MM-DD")
+    parser.add_argument("--end-date", default=None, help="结束日期，格式 YYYY-MM-DD")
+    parser.add_argument("--no-date-filter", action="store_true", help="关闭日期范围过滤")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -37,22 +46,30 @@ def main(argv: list[str] | None = None) -> None:
     config = AppConfig.load(args.config)
 
     if args.command == "crawl":
-        code = cmd_crawl(config, args.smoke, args.target_total)
+        code = cmd_crawl(config, args.smoke, args.target_total, args.start_date, args.end_date, args.no_date_filter)
     elif args.command == "analyze":
         code = cmd_analyze(config, args.input, args.output)
     elif args.command == "visualize":
         code = cmd_visualize(config, args.input)
     elif args.command == "all":
-        code = cmd_all(config, args.smoke, args.target_total)
+        code = cmd_all(config, args.smoke, args.target_total, args.start_date, args.end_date, args.no_date_filter)
     else:
         parser.error("unknown command")
         code = 2
     raise SystemExit(code)
 
 
-def cmd_crawl(config: AppConfig, smoke: bool, target_total: int | None) -> int:
+def cmd_crawl(
+    config: AppConfig,
+    smoke: bool,
+    target_total: int | None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    no_date_filter: bool = False,
+) -> int:
     target = target_total or int(config.get("crawl", "target_total", default=3000))
-    comments = crawl_all(config, target_total=target, smoke=smoke)
+    date_range = build_date_range(config, start_date, end_date, no_date_filter)
+    comments = crawl_all(config, target_total=target, smoke=smoke, date_range=date_range)
     output = config.path("raw_comments")
     write_comments(output, comments)
     counts = Counter(comment.platform for comment in comments)
@@ -86,8 +103,15 @@ def cmd_visualize(config: AppConfig, input_path: str | None) -> int:
     return 0
 
 
-def cmd_all(config: AppConfig, smoke: bool, target_total: int | None) -> int:
-    crawl_code = cmd_crawl(config, smoke=smoke, target_total=target_total)
+def cmd_all(
+    config: AppConfig,
+    smoke: bool,
+    target_total: int | None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    no_date_filter: bool = False,
+) -> int:
+    crawl_code = cmd_crawl(config, smoke, target_total, start_date, end_date, no_date_filter)
     if crawl_code:
         return crawl_code
     analyze_code = cmd_analyze(config, None, None)
@@ -98,4 +122,3 @@ def cmd_all(config: AppConfig, smoke: bool, target_total: int | None) -> int:
 
 if __name__ == "__main__":
     main(sys.argv[1:])
-
