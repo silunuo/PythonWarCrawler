@@ -3,7 +3,7 @@ from __future__ import annotations
 from math import ceil
 
 from src.common.config import AppConfig
-from src.common.date_range import DateRange
+from src.common.date_range import DateRange, parse_iso_datetime
 from src.common.models import Comment, dedupe_comments
 from src.crawlers.bilibili import BilibiliCrawler
 from src.crawlers.reddit import RedditCrawler
@@ -34,7 +34,7 @@ def crawl_all(
             target = max(per_platform, target_total - len(dedupe_comments(comments)))
         print(f"[crawl] {crawler.platform} target={target}")
         rows = crawler.crawl(target=target, smoke=smoke, date_range=date_range)
-        comments.extend(rows)
+        comments.extend(filter_by_date_range(rows, date_range))
         comments = dedupe_comments(comments)
         print(f"[crawl] {crawler.platform} got={len(rows)} total={len(comments)}")
         if smoke:
@@ -43,3 +43,9 @@ def crawl_all(
             break
 
     return dedupe_comments(comments)
+
+
+def filter_by_date_range(comments: list[Comment], date_range: DateRange | None) -> list[Comment]:
+    if not date_range or not date_range.enabled:
+        return comments
+    return [comment for comment in comments if date_range.contains_datetime(parse_iso_datetime(comment.published_at))]

@@ -6,7 +6,7 @@ from typing import Any
 import aiotieba
 
 from src.common.config import AppConfig
-from src.common.date_range import DateRange
+from src.common.date_range import DateRange, datetime_from_unix, parse_iso_datetime
 from src.common.models import Comment, clean_content, iso_from_unix
 
 
@@ -20,9 +20,9 @@ class TiebaCrawler:
         self.keywords = ["伊朗", "以色列", "美国", "美以伊", "冲突", "战争", "反击"]
 
     def crawl(self, target: int, smoke: bool = False, date_range: DateRange | None = None) -> list[Comment]:
-        return asyncio.run(self._crawl_async(target, smoke))
+        return asyncio.run(self._crawl_async(target, smoke, date_range))
 
-    async def _crawl_async(self, target: int, smoke: bool) -> list[Comment]:
+    async def _crawl_async(self, target: int, smoke: bool, date_range: DateRange | None) -> list[Comment]:
         result: list[Comment] = []
         seen: set[str] = set()
         forums = self.config.get("crawl", "tieba_forums", default=[])
@@ -32,7 +32,7 @@ class TiebaCrawler:
         page_size = int(self.config.get("crawl", "tieba", "page_size", default=30))
 
         async with aiotieba.Client() as client:
-            thread_titles = await self._find_threads(client, forums, queries, thread_pages, page_size, smoke)
+            thread_titles = await self._find_threads(client, forums, queries, thread_pages, page_size, smoke, date_range)
             for tid, title in thread_titles.items():
                 for page in range(1, post_pages + 1):
                     try:
@@ -51,6 +51,9 @@ class TiebaCrawler:
                         break
                     for post in posts:
                         for comment in self._parse_post_with_comments(post, title):
+                            comment_dt = parse_iso_datetime(comment.published_at)
+                            if date_range and not date_range.contains_datetime(comment_dt):
+                                continue
                             if comment.source_id in seen:
                                 continue
                             if not self._is_related(comment.content, title):
@@ -70,6 +73,7 @@ class TiebaCrawler:
         thread_pages: int,
         page_size: int,
         smoke: bool,
+        date_range: DateRange | None,
     ) -> dict[int, str]:
         threads: dict[int, str] = {}
         for forum in forums:
@@ -88,6 +92,9 @@ class TiebaCrawler:
                         print(f"[Tieba] search failed forum={forum} query={query}: {exc}")
                         break
                     for row in rows or []:
+                        row_dt = datetime_from_unix(getattr(row, "create_time", ""))
+                        if date_range and not date_range.contains_datetime(row_dt):
+                            continue
                         tid = getattr(row, "tid", 0)
                         title = clean_content(getattr(row, "title", "") or getattr(row, "text", ""))
                         if tid and self._is_related(title, query):
@@ -100,6 +107,9 @@ class TiebaCrawler:
                     print(f"[Tieba] forum failed forum={forum}: {exc}")
                     break
                 for row in rows or []:
+                    row_dt = datetime_from_unix(getattr(row, "create_time", ""))
+                    if date_range and not date_range.contains_datetime(row_dt):
+                        continue
                     tid = getattr(row, "tid", 0)
                     title = clean_content(getattr(row, "title", "") or getattr(row, "text", ""))
                     if tid and self._is_related(title, ""):

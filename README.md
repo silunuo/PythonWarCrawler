@@ -77,6 +77,9 @@ export HTTPS_PROXY="http://127.0.0.1:7890"
 | --- | --- |
 | `proxy.enabled` | 是否使用代理 |
 | `proxy.http` / `proxy.https` | 代理地址，默认是 `127.0.0.1:7890` |
+| `date_range.enabled` | 是否按日期范围过滤，默认开启 |
+| `date_range.start_date` | 默认开始日期，当前是 `2026-02-28` |
+| `date_range.end_date` | 默认结束日期，`null` 表示当天 |
 | `crawl.target_total` | 正式抓取目标数量，默认 3000 |
 | `crawl.queries_cn` | 中文关键词，用于 Bilibili 和贴吧 |
 | `crawl.queries_en` | 英文关键词，用于 Reddit 和 YouTube |
@@ -121,6 +124,18 @@ data/processed/analyzed_comments.csv
 output/summary.json
 output/dashboard.html
 output/conclusions.md
+```
+
+如果想指定日期范围：
+
+```powershell
+.\.venv\Scripts\python main.py all --smoke --start-date 2026-02-28 --end-date 2026-05-26
+```
+
+如果想临时关闭日期过滤：
+
+```powershell
+.\.venv\Scripts\python main.py all --smoke --no-date-filter
 ```
 
 ---
@@ -184,6 +199,8 @@ macOS / Linux：
 ```
 
 正式模式会检查有效评论数量。如果真实平台返回的数据少于 3000 条，程序会退出并提示实际数量。程序不会补假数据。
+
+默认会按 `config.json` 里的日期范围过滤。当前默认是从 `2026-02-28` 到当天。
 
 ---
 

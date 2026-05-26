@@ -6,7 +6,7 @@ from typing import Any
 import requests
 
 from src.common.config import AppConfig
-from src.common.date_range import DateRange
+from src.common.date_range import DateRange, datetime_from_unix
 from src.common.models import Comment, clean_content, iso_from_unix
 
 
@@ -28,12 +28,12 @@ class RedditCrawler:
         self.max_retries = int(config.get("request", "max_retries", default=3))
 
     def crawl(self, target: int, smoke: bool = False, date_range: DateRange | None = None) -> list[Comment]:
-        comments = self._crawl_pullpush(target, smoke)
+        comments = self._crawl_pullpush(target, smoke, date_range)
         if len(comments) >= target or comments:
             return comments[:target]
-        return self._crawl_reddit_json(target, smoke)
+        return self._crawl_reddit_json(target, smoke, date_range)
 
-    def _crawl_pullpush(self, target: int, smoke: bool) -> list[Comment]:
+    def _crawl_pullpush(self, target: int, smoke: bool, date_range: DateRange | None) -> list[Comment]:
         result: list[Comment] = []
         seen: set[str] = set()
         queries = self.config.get("crawl", "queries_en", default=[])
@@ -52,6 +52,13 @@ class RedditCrawler:
                     "sort": "desc",
                     "sort_type": "created_utc",
                 }
+                if date_range:
+                    after = date_range.after_unix()
+                    before_limit = date_range.before_unix()
+                    if after:
+                        params["after"] = after
+                    if before_limit:
+                        params["before"] = before_limit
                 if before:
                     params["before"] = before
                 data = self._get_json(url, params)
@@ -60,6 +67,11 @@ class RedditCrawler:
                     break
                 min_time: int | None = None
                 for row in rows:
+                    created_dt = datetime_from_unix(row.get("created_utc"))
+                    if date_range and not date_range.contains_datetime(created_dt):
+                        if date_range.is_before_start(created_dt):
+                            min_time = int(row.get("created_utc", 0)) if min_time is None else min(min_time, int(row.get("created_utc", 0)))
+                        continue
                     comment = self._parse_pullpush(row)
                     if not comment or comment.source_id in seen:
                         continue
@@ -75,7 +87,7 @@ class RedditCrawler:
                 self._sleep(smoke)
         return result
 
-    def _crawl_reddit_json(self, target: int, smoke: bool) -> list[Comment]:
+    def _crawl_reddit_json(self, target: int, smoke: bool, date_range: DateRange | None) -> list[Comment]:
         result: list[Comment] = []
         seen: set[str] = set()
         for query in self.config.get("crawl", "queries_en", default=[]):
@@ -85,6 +97,9 @@ class RedditCrawler:
                 if not post_id:
                     continue
                 for row in self._fetch_post_comments(post_id):
+                    created_dt = datetime_from_unix(row.get("data", {}).get("created_utc"))
+                    if date_range and not date_range.contains_datetime(created_dt):
+                        continue
                     comment = self._parse_reddit_comment(row)
                     if not comment or comment.source_id in seen:
                         continue

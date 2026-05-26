@@ -6,7 +6,7 @@ from typing import Any
 import requests
 
 from src.common.config import AppConfig
-from src.common.date_range import DateRange
+from src.common.date_range import DateRange, parse_iso_datetime
 from src.common.models import Comment, clean_content, iso_from_unix
 
 
@@ -54,6 +54,8 @@ class BilibiliCrawler:
                         page_limit=comment_pages,
                     )
                     for comment in video_comments:
+                        if date_range and not date_range.contains_datetime(parse_iso_datetime(comment.published_at)):
+                            continue
                         if comment.source_id in seen:
                             continue
                         seen.add(comment.source_id)

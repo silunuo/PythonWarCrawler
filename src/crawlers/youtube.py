@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 import re
 import time
+from datetime import date
 from typing import Any
 
 import requests
 
 from src.common.config import AppConfig
-from src.common.date_range import DateRange
+from src.common.date_range import DateRange, date_from_relative
 from src.common.models import Comment, clean_content, stable_id
 
 
@@ -21,9 +22,10 @@ class YouTubeCrawler:
         self.session.headers.update(
             {
                 "User-Agent": config.get("request", "user_agent", default="Mozilla/5.0"),
-                "Accept": "text/html,application/json,text/plain,*/*",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
                 "Accept-Language": "en-US,en;q=0.9",
-                "Origin": "https://www.youtube.com",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
             }
         )
         self.proxies = config.proxies
@@ -45,6 +47,8 @@ class YouTubeCrawler:
             videos = self._search_videos(query, search_pages, videos_per_query)
             for video_id in videos:
                 for comment in self._fetch_video_comments(video_id, comment_pages):
+                    if date_range and not date_range.contains_date(self._comment_date(comment.published_at)):
+                        continue
                     if comment.source_id in seen:
                         continue
                     seen.add(comment.source_id)
@@ -105,7 +109,13 @@ class YouTubeCrawler:
         continuations = self._comment_continuations(html)
 
         for continuation in continuations[:page_limit]:
-            data = self._post_youtubei("next", innertube_key, context, {"continuation": continuation})
+            data = self._post_youtubei(
+                "next",
+                innertube_key,
+                context,
+                {"continuation": continuation},
+                referer=watch_url,
+            )
             if not data:
                 continue
             for comment in self._parse_comment_renderers(data, video_id, watch_url):
@@ -117,7 +127,13 @@ class YouTubeCrawler:
             for _ in range(max(0, page_limit - 1)):
                 if not next_cursor:
                     break
-                next_data = self._post_youtubei("next", innertube_key, context, {"continuation": next_cursor})
+                next_data = self._post_youtubei(
+                    "next",
+                    innertube_key,
+                    context,
+                    {"continuation": next_cursor},
+                    referer=watch_url,
+                )
                 if not next_data:
                     break
                 for comment in self._parse_comment_renderers(next_data, video_id, watch_url):
@@ -134,16 +150,19 @@ class YouTubeCrawler:
 
     def _parse_comments_from_json_text(self, text: str, video_id: str, watch_url: str) -> list[Comment]:
         result: list[Comment] = []
-        for match in re.finditer(r"ytInitialData\s*=\s*(\{.*?\});", text):
-            try:
-                data = json.loads(match.group(1))
-            except json.JSONDecodeError:
-                continue
+        data = self._extract_json_object(text, "var ytInitialData =") or self._extract_json_object(text, "ytInitialData =")
+        if data:
             result.extend(self._parse_comment_renderers(data, video_id, watch_url))
         return result
 
     def _parse_comment_renderers(self, data: Any, video_id: str, watch_url: str) -> list[Comment]:
         comments: list[Comment] = []
+        comments.extend(self._parse_legacy_comment_renderers(data, video_id, watch_url))
+        comments.extend(self._parse_comment_entity_payloads(data, video_id, watch_url))
+        return comments
+
+    def _parse_legacy_comment_renderers(self, data: Any, video_id: str, watch_url: str) -> list[Comment]:
+        result: list[Comment] = []
         for renderer in self._find_renderers(data, {"commentRenderer", "commentThreadRenderer"}):
             if "commentThreadRenderer" in renderer:
                 renderer = renderer["commentThreadRenderer"].get("comment", {}).get("commentRenderer", {})
@@ -154,39 +173,71 @@ class YouTubeCrawler:
             content = clean_content(self._runs_text(renderer.get("contentText")))
             if not content:
                 continue
-            comment_id = renderer.get("commentId") or stable_id(video_id, content, self._runs_text(renderer.get("authorText")))
-            comments.append(
-                Comment(
-                    platform=self.platform,
-                    source_id=f"youtube:{comment_id}",
-                    content=content,
-                    published_at=self._runs_text(renderer.get("publishedTimeText")),
-                    user_name=self._runs_text(renderer.get("authorText")),
-                    like_count=self._parse_like_count(self._runs_text(renderer.get("voteCount"))),
-                    url=f"{watch_url}&lc={comment_id}",
-                    language="en",
-                )
-            )
-        return comments
+            author = self._runs_text(renderer.get("authorText"))
+            published = self._runs_text(renderer.get("publishedTimeText"))
+            comment_id = renderer.get("commentId") or stable_id(video_id, content, author)
+            result.append(self._comment(video_id, watch_url, comment_id, content, author, published, renderer.get("voteCount")))
+        return result
+
+    def _parse_comment_entity_payloads(self, data: Any, video_id: str, watch_url: str) -> list[Comment]:
+        result: list[Comment] = []
+        for payload in self._find_values(data, "commentEntityPayload"):
+            if not isinstance(payload, dict):
+                continue
+            properties = payload.get("properties") or {}
+            content = clean_content((properties.get("content") or {}).get("content", ""))
+            if not content:
+                continue
+            author = (payload.get("author") or {}).get("displayName", "")
+            published = properties.get("publishedTime", "")
+            comment_id = properties.get("commentId") or stable_id(video_id, content, author)
+            like_text = (payload.get("toolbar") or {}).get("likeButtonA11y", "")
+            result.append(self._comment(video_id, watch_url, comment_id, content, author, published, like_text))
+        return result
+
+    def _comment(
+        self,
+        video_id: str,
+        watch_url: str,
+        comment_id: str,
+        content: str,
+        author: str,
+        published: str,
+        like_value: Any,
+    ) -> Comment:
+        parsed_date = self._comment_date(published)
+        return Comment(
+            platform=self.platform,
+            source_id=f"youtube:{comment_id}",
+            content=content,
+            published_at=parsed_date.isoformat() if parsed_date else published,
+            user_name=author,
+            like_count=self._parse_like_count(self._runs_text(like_value) or str(like_value or "")),
+            url=f"{watch_url}&lc={comment_id}",
+            language="en",
+        )
 
     def _extract_context_and_key(self, html: str) -> tuple[dict[str, Any] | None, str | None]:
         key_match = re.search(r'"INNERTUBE_API_KEY":"([^"]+)"', html)
-        cfg_match = re.search(r"ytcfg\.set\((\{.*?\})\);", html)
         innertube_key = key_match.group(1) if key_match else None
-        context = None
-        if cfg_match:
-            try:
-                cfg = json.loads(cfg_match.group(1))
-                context = cfg.get("INNERTUBE_CONTEXT")
-            except json.JSONDecodeError:
-                context = None
+        cfg = self._extract_json_object(html, "ytcfg.set({")
+        context = cfg.get("INNERTUBE_CONTEXT") if isinstance(cfg, dict) else None
+        if not innertube_key and isinstance(cfg, dict):
+            innertube_key = cfg.get("INNERTUBE_API_KEY")
         return context, innertube_key
 
     def _comment_continuations(self, html: str) -> list[str]:
-        cursors = re.findall(r'"continuation":"([^"]+)"', html)
-        preferred = [cursor for cursor in cursors if "comments" in cursor.lower() or "comment" in cursor.lower()]
-        rest = [cursor for cursor in cursors if cursor not in preferred]
-        return list(dict.fromkeys(preferred + rest))
+        data = self._extract_json_object(html, "var ytInitialData =") or self._extract_json_object(html, "ytInitialData =")
+        cursors: list[str] = []
+        if data:
+            for command in self._find_values(data, "continuationCommand"):
+                if isinstance(command, dict):
+                    token = command.get("token") or command.get("continuation")
+                    if token:
+                        cursors.append(str(token))
+        if not cursors:
+            cursors = re.findall(r'"continuation":"([^"]+)"', html)
+        return list(dict.fromkeys(cursors))
 
     def _first_continuation(self, text: str) -> str | None:
         cursors = re.findall(r'"continuation":"([^"]+)"', text)
@@ -204,15 +255,27 @@ class YouTubeCrawler:
         innertube_key: str,
         context: dict[str, Any],
         payload: dict[str, Any],
+        referer: str | None = None,
     ) -> dict[str, Any] | None:
         url = f"https://www.youtube.com/youtubei/v1/{endpoint}"
         body = {"context": context}
         body.update(payload)
+        client = context.get("client", {})
+        headers = {
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Content-Type": "application/json",
+            "Origin": "https://www.youtube.com",
+            "Referer": referer or "https://www.youtube.com/",
+            "X-YouTube-Client-Name": "1",
+            "X-YouTube-Client-Version": client.get("clientVersion", ""),
+        }
         for attempt in range(1, self.max_retries + 1):
             try:
                 response = self.session.post(
                     url,
                     params={"key": innertube_key},
+                    headers=headers,
                     json=body,
                     proxies=self.proxies,
                     timeout=self.timeout,
@@ -237,6 +300,45 @@ class YouTubeCrawler:
             self._sleep(False)
         return ""
 
+    def _extract_json_object(self, text: str, marker: str) -> dict[str, Any] | None:
+        marker_index = text.find(marker)
+        if marker_index < 0:
+            return None
+        start = text.find("{", marker_index + len(marker) - 1)
+        if start < 0:
+            return None
+        raw = self._balanced_json_text(text, start)
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+
+    def _balanced_json_text(self, text: str, start: int) -> str | None:
+        depth = 0
+        in_string = False
+        escaped = False
+        for index in range(start, len(text)):
+            char = text[index]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+            else:
+                if char == '"':
+                    in_string = True
+                elif char == "{":
+                    depth += 1
+                elif char == "}":
+                    depth -= 1
+                    if depth == 0:
+                        return text[start : index + 1]
+        return None
+
     def _runs_text(self, value: Any) -> str:
         if isinstance(value, str):
             return clean_content(value)
@@ -249,6 +351,9 @@ class YouTubeCrawler:
 
     def _parse_like_count(self, text: str) -> int:
         value = text.lower().replace(",", "").strip()
+        match = re.search(r"(\d+(?:\.\d+)?)\s*(k|m)?", value)
+        if match:
+            value = "".join(part for part in match.groups(default="") if part)
         if not value:
             return 0
         multiplier = 1
@@ -262,6 +367,12 @@ class YouTubeCrawler:
             return int(float(value) * multiplier)
         except ValueError:
             return 0
+
+    def _comment_date(self, published_at: str) -> date | None:
+        try:
+            return date.fromisoformat(published_at)
+        except ValueError:
+            return date_from_relative(published_at)
 
     def _find_renderers(self, data: Any, names: set[str]) -> list[dict[str, Any]]:
         found: list[dict[str, Any]] = []
